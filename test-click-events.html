@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>点击事件测试 - 魔法商店H5</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a0e0a;
+            color: #FFD700;
+            font-family: Arial, sans-serif;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .test-section {
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid #FFD700;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .test-button {
+            background: #FFD700;
+            color: #2C1810;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background 0.3s;
+        }
+        
+        .test-button:hover {
+            background: #FFA500;
+        }
+        
+        .test-result {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        #gameCanvas {
+            border: 2px solid #FFD700;
+            background: #000;
+            display: block;
+            margin: 20px auto;
+        }
+        
+        .log {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🏪 魔法商店H5 - 点击事件测试</h1>
+        
+        <div class="test-section">
+            <h2>环境检测测试</h2>
+            <button class="test-button" onclick="testEnvironmentDetection()">测试环境检测</button>
+            <div id="envResult" class="test-result">点击按钮开始测试...</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>广告管理器测试</h2>
+            <button class="test-button" onclick="testAdManager()">测试广告管理器</button>
+            <button class="test-button" onclick="testReviveAd()">测试复活广告</button>
+            <div id="adResult" class="test-result">点击按钮开始测试...</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Canvas点击测试</h2>
+            <canvas id="gameCanvas" width="300" height="200"></canvas>
+            <div>点击Canvas测试坐标转换</div>
+            <div id="canvasResult" class="test-result">等待点击...</div>
+        </div>
+        
+        <div class="test-section">
+            <h2>控制台日志</h2>
+            <button class="test-button" onclick="clearLog()">清空日志</button>
+            <div id="consoleLog" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // 重写console.log来显示在页面上
+        const originalLog = console.log;
+        const logElement = document.getElementById('consoleLog');
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            logElement.innerHTML += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        };
+        
+        function clearLog() {
+            logElement.innerHTML = '';
+        }
+        
+        // H5适配器
+        class H5GameAdapter {
+            constructor() {
+                this.createWxAPI();
+            }
+            
+            createWxAPI() {
+                window.wx = {
+                    getSystemInfoSync: () => ({
+                        windowWidth: 300,
+                        windowHeight: 200,
+                        platform: 'h5'
+                    }),
+                    showModal: (options) => {
+                        const result = confirm((options.title || '') + '\n\n' + (options.content || ''));
+                        if (options.success) {
+                            options.success({ confirm: result, cancel: !result });
+                        }
+                    },
+                    showToast: (options) => {
+                        console.log('Toast:', options.title);
+                    },
+                    getStorageSync: (key) => {
+                        try {
+                            const data = localStorage.getItem('magicShop_' + key);
+                            return data ? JSON.parse(data) : null;
+                        } catch (e) {
+                            return null;
+                        }
+                    },
+                    setStorageSync: (key, data) => {
+                        try {
+                            localStorage.setItem('magicShop_' + key, JSON.stringify(data));
+                        } catch (e) {
+                            console.warn('保存失败:', e);
+                        }
+                    },
+                    createRewardedVideoAd: (options) => ({
+                        load: () => {
+                            console.log('加载激励视频广告 (H5环境下模拟)');
+                            return Promise.resolve();
+                        },
+                        show: () => {
+                            console.log('显示激励视频广告 (H5环境下模拟)');
+                            return Promise.resolve();
+                        },
+                        onLoad: (callback) => setTimeout(callback, 100),
+                        onError: (callback) => {},
+                        onClose: (callback) => {
+                            setTimeout(() => {
+                                const watchedComplete = Math.random() > 0.2;
+                                callback({ isEnded: watchedComplete });
+                            }, 2000);
+                        }
+                    })
+                };
+                console.log('wx API 创建完成');
+            }
+        }
+        
+        // 初始化适配器
+        const adapter = new H5GameAdapter();
+        
+        // AdManager类（简化版）
+        class AdManager {
+            constructor() {
+                this.isH5Environment = null;
+                this.isAdReady = false;
+                
+                setTimeout(() => {
+                    this.isH5Environment = this.detectH5Environment();
+                    this.init();
+                }, 100);
+            }
+            
+            detectH5Environment() {
+                if (typeof window === 'undefined') {
+                    return false;
+                }
+                
+                if (!window.wx) {
+                    return true;
+                }
+                
+                const isSimulatedWx = window.wx.createRewardedVideoAd && 
+                                     window.wx.createRewardedVideoAd.toString().includes('H5环境下模拟');
+                
+                return isSimulatedWx || !window.wx.createRewardedVideoAd;
+            }
+            
+            init() {
+                if (this.isH5Environment) {
+                    console.log('检测到H5环境 - 使用模拟广告系统');
+                    this.isAdReady = true;
+                } else {
+                    console.log('检测到微信环境 - 使用真实广告系统');
+                }
+            }
+            
+            showReviveAd(callback) {
+                if (this.isH5Environment === null) {
+                    console.log('环境检测中，延迟执行');
+                    setTimeout(() => this.showReviveAd(callback), 200);
+                    return;
+                }
+                
+                if (this.isH5Environment) {
+                    console.log('显示H5复活广告对话框');
+                    wx.showModal({
+                        title: '观看广告 - 复活',
+                        content: '观看广告可以复活并继续游戏',
+                        success: (res) => {
+                            if (res.confirm) {
+                                console.log('用户确认观看广告');
+                                setTimeout(() => {
+                                    callback && callback(true);
+                                    console.log('广告观看完成，复活成功！');
+                                }, 1000);
+                            } else {
+                                console.log('用户取消观看广告');
+                                callback && callback(false);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        
+        // 测试函数
+        let adManager;
+        
+        function testEnvironmentDetection() {
+            const result = document.getElementById('envResult');
+            result.innerHTML = '正在测试环境检测...\n';
+            
+            // 检查wx对象
+            result.innerHTML += `wx对象存在: ${!!window.wx}\n`;
+            result.innerHTML += `wx.createRewardedVideoAd存在: ${!!window.wx?.createRewardedVideoAd}\n`;
+            
+            if (window.wx?.createRewardedVideoAd) {
+                const funcStr = window.wx.createRewardedVideoAd.toString();
+                result.innerHTML += `是否为模拟函数: ${funcStr.includes('H5环境下模拟')}\n`;
+            }
+            
+            // 测试AdManager的环境检测
+            const testManager = new AdManager();
+            setTimeout(() => {
+                result.innerHTML += `AdManager检测到的环境: ${testManager.isH5Environment ? 'H5' : '微信'}\n`;
+                result.innerHTML += `广告是否准备就绪: ${testManager.isAdReady}\n`;
+            }, 200);
+        }
+        
+        function testAdManager() {
+            const result = document.getElementById('adResult');
+            result.innerHTML = '正在初始化AdManager...\n';
+            
+            adManager = new AdManager();
+            
+            setTimeout(() => {
+                result.innerHTML += `初始化完成\n`;
+                result.innerHTML += `环境类型: ${adManager.isH5Environment ? 'H5' : '微信'}\n`;
+                result.innerHTML += `广告状态: ${adManager.isAdReady ? '就绪' : '未就绪'}\n`;
+            }, 300);
+        }
+        
+        function testReviveAd() {
+            const result = document.getElementById('adResult');
+            if (!adManager) {
+                result.innerHTML += '请先初始化AdManager\n';
+                return;
+            }
+            
+            result.innerHTML += '正在测试复活广告...\n';
+            
+            adManager.showReviveAd((success) => {
+                if (success) {
+                    result.innerHTML += '✅ 复活广告测试成功！\n';
+                } else {
+                    result.innerHTML += '❌ 复活广告测试失败\n';
+                }
+            });
+        }
+        
+        // Canvas点击测试
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 绘制简单的测试界面
+        ctx.fillStyle = '#2C1810';
+        ctx.fillRect(0, 0, 300, 200);
+        ctx.fillStyle = '#FFD700';
+        ctx.font = '16px Arial';
+        ctx.fillText('点击这里测试', 100, 100);
+        ctx.strokeStyle = '#FFD700';
+        ctx.strokeRect(80, 80, 140, 40);
+        
+        // 绑定点击事件
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            console.log(`Canvas点击: (${x.toFixed(1)}, ${y.toFixed(1)})`);
+            
+            const result = document.getElementById('canvasResult');
+            result.innerHTML = `点击坐标: (${x.toFixed(1)}, ${y.toFixed(1)})\n`;
+            result.innerHTML += `Canvas尺寸: ${canvas.width} x ${canvas.height}\n`;
+            result.innerHTML += `DOM尺寸: ${rect.width.toFixed(1)} x ${rect.height.toFixed(1)}\n`;
+            result.innerHTML += `缩放比例: ${scaleX.toFixed(2)} x ${scaleY.toFixed(2)}\n`;
+            
+            // 在点击位置绘制小圆点
+            ctx.fillStyle = '#FF6B6B';
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        
+        // 初始化日志
+        console.log('测试页面已加载');
+        console.log('开始测试H5环境适配');
+    </script>
+</body>
+</html>

@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>魔法商店大亨 - H5版</title>
+    <meta name="description" content="经营你的魔法商店，制作药水，升级设备，成为最强大的魔法商人！">
+    <meta name="keywords" content="魔法商店,经营游戏,放置游戏,H5游戏">
+    
+    <!-- PWA相关 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2C1810">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiByeD0iMjQiIGZpbGw9IiMyQzE4MTAiLz4KPHN2ZyB4PSI0OCIgeT0iNDgiIHdpZHRoPSI5NiIgaGVpZ2h0PSI5NiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjRkZENzAwIj4KPHA+8J+PquKcqO+4jzwvcD4KPHN2Zz4KPC9zdmc+">
+    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiByeD0iMjQiIGZpbGw9IiMyQzE4MTAiLz4KPHN2ZyB4PSI0OCIgeT0iNDgiIHdpZHRoPSI5NiIgaGVpZ2h0PSI5NiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjRkZENzAwIj4KPHA+8J+PquKcqO+4jzwvcD4KPHN2Zz4KPC9zdmc+">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1a0e0a 0%, #2C1810 50%, #1a0e0a 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', 'Microsoft YaHei', sans-serif;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* 防止页面滚动 */
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 414px; /* iPhone 6 Plus宽度 */
+            max-height: 896px; /* iPhone XR高度 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        canvas {
+            background: #000;
+            border-radius: 0;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            touch-action: none;
+        }
+        
+        #loadingScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #2C1810 0%, #FFD700 50%, #2C1810 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #FFD700;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+        
+        #loadingScreen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loading-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .loading-subtitle {
+            font-size: 16px;
+            margin-bottom: 30px;
+            opacity: 0.8;
+        }
+        
+        .loading-progress {
+            width: 250px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        .loading-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #FFD700, #FFA500);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 3px;
+        }
+        
+        .loading-text {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+        
+        #errorScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            color: #ff6b6b;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .error-title {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        
+        .error-message {
+            font-size: 16px;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        
+        .retry-btn {
+            background: #FFD700;
+            color: #2C1810;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .retry-btn:hover {
+            background: #FFA500;
+        }
+        
+        /* 移动端优化 */
+        @media (max-width: 480px) {
+            #gameContainer {
+                max-width: 100vw;
+                max-height: 100vh;
+            }
+            
+            canvas {
+                border-radius: 0;
+            }
+            
+            .loading-title {
+                font-size: 24px;
+            }
+            
+            .loading-progress {
+                width: 80%;
+            }
+        }
+        
+        /* 横屏适配 */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .loading-title {
+                font-size: 20px;
+                margin-bottom: 10px;
+            }
+            
+            .loading-subtitle {
+                font-size: 14px;
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <!-- 加载界面 -->
+        <div id="loadingScreen">
+            <div class="loading-title">🏪 魔法商店大亨</div>
+            <div class="loading-subtitle">经营你的魔法商店帝国</div>
+            <div class="loading-progress">
+                <div class="loading-bar" id="loadingBar"></div>
+            </div>
+            <div class="loading-text" id="loadingText">正在初始化游戏...</div>
+        </div>
+        
+        <!-- 错误界面 -->
+        <div id="errorScreen">
+            <div class="error-title">⚠️ 游戏加载失败</div>
+            <div class="error-message" id="errorMessage">发生了一些问题，请稍后重试</div>
+            <button class="retry-btn" onclick="location.reload()">重新加载</button>
+        </div>
+        
+        <!-- 游戏画布 -->
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    
+    <script>
+        // H5环境适配 - 模拟微信小游戏API
+        class H5GameAdapter {
+            constructor() {
+                this.setupCanvas();
+                this.createWxAPI();
+                this.setupGlobalErrorHandling();
+                this.updateLoadingProgress(10, '正在初始化环境...');
+            }
+            
+            setupCanvas() {
+                const canvas = document.getElementById('gameCanvas');
+                const container = document.getElementById('gameContainer');
+                
+                // 动态设置画布尺寸
+                const updateCanvasSize = () => {
+                    const containerRect = container.getBoundingClientRect();
+                    const aspectRatio = 9 / 16; // 手机屏幕比例
+                    
+                    let displayWidth = containerRect.width;
+                    let displayHeight = containerRect.height;
+                    
+                    // 保持宽高比
+                    if (displayWidth / displayHeight > aspectRatio) {
+                        displayWidth = displayHeight * aspectRatio;
+                    } else {
+                        displayHeight = displayWidth / aspectRatio;
+                    }
+                    
+                    // 限制最大尺寸
+                    displayWidth = Math.min(displayWidth, 414);
+                    displayHeight = Math.min(displayHeight, 896);
+                    
+                    // 重要修复：Canvas内部分辨率直接使用显示尺寸
+                    // 不使用设备像素比缩放，避免渲染坐标错位
+                    canvas.width = displayWidth;
+                    canvas.height = displayHeight;
+                    
+                    // 设置画布显示尺寸
+                    canvas.style.width = displayWidth + 'px';
+                    canvas.style.height = displayHeight + 'px';
+                    
+                    // 移除ctx.scale(dpr, dpr)，避免坐标系混乱
+                    // 游戏逻辑直接使用Canvas的width/height即可
+                    
+                    console.log(`Canvas设置: 显示尺寸 ${displayWidth}x${displayHeight}, 内部分辨率 ${canvas.width}x${canvas.height}`);
+                };
+                
+                updateCanvasSize();
+                window.addEventListener('resize', updateCanvasSize);
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(updateCanvasSize, 100);
+                });
+            }
+            
+            createWxAPI() {
+                const canvas = document.getElementById('gameCanvas');
+                const systemInfo = {
+                    windowWidth: canvas.width,
+                    windowHeight: canvas.height,
+                    screenWidth: window.screen.width,
+                    screenHeight: window.screen.height,
+                    pixelRatio: window.devicePixelRatio || 1,
+                    statusBarHeight: 0,
+                    platform: this.detectPlatform(),
+                    model: navigator.userAgent,
+                    safeArea: {
+                        top: 0,
+                        bottom: canvas.height,
+                        left: 0,
+                        right: canvas.width
+                    }
+                };
+                
+                window.wx = {
+                    getSystemInfoSync: () => systemInfo,
+                    createCanvas: () => canvas,
+                    createImage: () => {
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous';
+                        return img;
+                    },
+                    onHide: (callback) => {
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.hidden) callback();
+                        });
+                        window.addEventListener('blur', callback);
+                        window.addEventListener('pagehide', callback);
+                    },
+                    onShow: (callback) => {
+                        document.addEventListener('visibilitychange', () => {
+                            if (!document.hidden) callback();
+                        });
+                        window.addEventListener('focus', callback);
+                        window.addEventListener('pageshow', callback);
+                    },
+                    showActionSheet: (options) => {
+                        const choice = prompt('请选择:\n' + options.itemList.map((item, i) => `${i + 1}: ${item}`).join('\n'));
+                        const index = parseInt(choice) - 1;
+                        if (!isNaN(index) && index >= 0 && index < options.itemList.length && options.success) {
+                            options.success({ tapIndex: index });
+                        } else if (options.fail) {
+                            options.fail({ errMsg: 'showActionSheet:fail cancel' });
+                        }
+                    },
+                    showModal: (options) => {
+                        const result = confirm((options.title || '') + '\n\n' + (options.content || ''));
+                        if (options.success) {
+                            options.success({ confirm: result, cancel: !result });
+                        }
+                    },
+                    showToast: (options) => {
+                        console.log('Toast:', options.title);
+                        // 可以在这里添加自定义的Toast显示逻辑
+                        if (typeof options.title === 'string') {
+                            this.showCustomToast(options.title, options.duration || 1500);
+                        }
+                    },
+                    shareAppMessage: (options) => {
+                        console.log('分享功能 (H5环境下模拟):', options);
+                        if (navigator.share) {
+                            navigator.share({
+                                title: options.title || '魔法商店大亨',
+                                text: options.desc || '快来和我一起经营魔法商店吧！',
+                                url: window.location.href
+                            }).catch(console.log);
+                        } else {
+                            this.showCustomToast('分享功能在H5环境下暂不可用');
+                        }
+                    },
+                    // 本地存储API
+                    getStorageSync: (key) => {
+                        try {
+                            const data = localStorage.getItem('magicShop_' + key);
+                            return data ? JSON.parse(data) : null;
+                        } catch (e) {
+                            console.warn('获取存储数据失败:', e);
+                            return null;
+                        }
+                    },
+                    setStorageSync: (key, data) => {
+                        try {
+                            localStorage.setItem('magicShop_' + key, JSON.stringify(data));
+                        } catch (e) {
+                            console.warn('保存存储数据失败:', e);
+                        }
+                    },
+                    removeStorageSync: (key) => {
+                        try {
+                            localStorage.removeItem('magicShop_' + key);
+                        } catch (e) {
+                            console.warn('删除存储数据失败:', e);
+                        }
+                    },
+                    // 云存储API模拟
+                    setUserCloudStorage: (options) => {
+                        console.log('云存储 (H5环境下模拟):', options.KVDataList);
+                        if (options.success) {
+                            setTimeout(options.success, 100);
+                        }
+                    },
+                    // 广告API模拟
+                    createRewardedVideoAd: (options) => {
+                        const ad = {
+                            load: () => {
+                                console.log('加载激励视频广告 (H5环境下模拟)');
+                                return Promise.resolve();
+                            },
+                            show: () => {
+                                console.log('显示激励视频广告 (H5环境下模拟)');
+                                return Promise.resolve();
+                            },
+                            onLoad: (callback) => {
+                                setTimeout(callback, 100);
+                            },
+                            onError: (callback) => {
+                                // H5环境下通常不会出错
+                            },
+                            onClose: (callback) => {
+                                // 模拟观看完成
+                                setTimeout(() => {
+                                    const watchedComplete = Math.random() > 0.2; // 80%概率观看完成
+                                    callback({ isEnded: watchedComplete });
+                                }, 2000);
+                            }
+                        };
+                        
+                        // 重要：添加H5环境标识，让AdManager能正确检测环境
+                        ad.toString = () => 'function() { /* H5环境下模拟 */ }';
+                        
+                        return ad;
+                    },
+                    createBannerAd: (options) => ({
+                        show: () => console.log('显示横幅广告 (H5环境下模拟)'),
+                        hide: () => console.log('隐藏横幅广告 (H5环境下模拟)'),
+                        onLoad: (callback) => setTimeout(callback, 100),
+                        onError: (callback) => {}
+                    })
+                };
+                
+                this.updateLoadingProgress(30, '正在加载游戏资源...');
+            }
+            
+            detectPlatform() {
+                const ua = navigator.userAgent.toLowerCase();
+                if (ua.indexOf('iphone') > -1 || ua.indexOf('ipad') > -1) {
+                    return 'ios';
+                } else if (ua.indexOf('android') > -1) {
+                    return 'android';
+                } else {
+                    return 'desktop';
+                }
+            }
+            
+            updateLoadingProgress(percent, text) {
+                const loadingBar = document.getElementById('loadingBar');
+                const loadingText = document.getElementById('loadingText');
+                if (loadingBar) loadingBar.style.width = percent + '%';
+                if (loadingText) loadingText.textContent = text;
+            }
+            
+            showCustomToast(message, duration = 1500) {
+                // 创建简单的Toast提示
+                const toast = document.createElement('div');
+                toast.textContent = message;
+                toast.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    z-index: 10000;
+                    font-size: 14px;
+                    max-width: 80%;
+                    text-align: center;
+                `;
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, duration);
+            }
+            
+            setupGlobalErrorHandling() {
+                window.addEventListener('error', (e) => {
+                    console.error('游戏运行错误:', e);
+                    this.showError('游戏运行时发生错误: ' + e.message);
+                });
+                
+                window.addEventListener('unhandledrejection', (e) => {
+                    console.error('未处理的Promise错误:', e);
+                    this.showError('游戏加载失败: ' + e.reason);
+                });
+            }
+            
+            showError(message) {
+                const errorScreen = document.getElementById('errorScreen');
+                const errorMessage = document.getElementById('errorMessage');
+                if (errorScreen && errorMessage) {
+                    errorMessage.textContent = message;
+                    errorScreen.style.display = 'flex';
+                }
+            }
+            
+            hideLoading() {
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (loadingScreen) {
+                    loadingScreen.classList.add('hidden');
+                    setTimeout(() => {
+                        loadingScreen.style.display = 'none';
+                    }, 500);
+                }
+            }
+        }
+        
+        // 初始化H5适配器
+        const gameAdapter = new H5GameAdapter();
+        
+        // 设置requestAnimationFrame兼容性
+        window.requestAnimationFrame = window.requestAnimationFrame || 
+                                       window.webkitRequestAnimationFrame || 
+                                       window.mozRequestAnimationFrame ||
+                                       function(callback) {
+                                           return setTimeout(callback, 1000 / 60);
+                                       };
+    </script>
+    
+    <script type="module">
+        try {
+            gameAdapter.updateLoadingProgress(50, '正在加载游戏模块...');
+            
+            // 导入游戏模块
+            const [
+                AdManager,
+                DataManager,
+                GameManager,
+                UIManager,
+                QuestManager
+            ] = await Promise.all([
+                import('./src/managers/AdManager.js'),
+                import('./src/managers/DataManager.js'),
+                import('./src/managers/GameManager.js'),
+                import('./src/managers/UIManagerNew.js'),
+                import('./src/managers/QuestManager.js')
+            ]);
+            
+            gameAdapter.updateLoadingProgress(80, '正在初始化游戏...');
+
+            // H5版游戏主类
+            class H5MagicShopGame {
+                constructor() {
+                    this.canvas = document.getElementById('gameCanvas');
+                    this.ctx = this.canvas.getContext('2d');
+                    
+                    // 初始化管理器
+                    this.adManager = new AdManager.default();
+                    this.dataManager = new DataManager.default();
+                    this.questManager = new QuestManager.default();
+                    this.gameManager = new GameManager.default(this.ctx, this.canvas);
+                    this.uiManager = new UIManager.default(this.ctx, this.canvas);
+                    
+                    this.init();
+                }
+                
+                init() {
+                    console.log('H5魔法商店游戏初始化开始');
+                    
+                    gameAdapter.updateLoadingProgress(90, '正在加载游戏数据...');
+                    
+                    // 加载游戏数据
+                    this.dataManager.loadData();
+                    
+                    // 设置管理器之间的关联
+                    this.setupManagerReferences();
+                    
+                    // 绑定事件
+                    this.bindEvents();
+                    
+                    gameAdapter.updateLoadingProgress(100, '游戏加载完成！');
+                    
+                    // 延迟启动游戏循环
+                    setTimeout(() => {
+                        gameAdapter.hideLoading();
+                        this.gameLoop();
+                        console.log('H5魔法商店游戏初始化完成');
+                    }, 500);
+                }
+                
+                setupManagerReferences() {
+                    // 让QuestManager能访问其他管理器
+                    this.questManager.setManagers({
+                        dataManager: this.dataManager,
+                        gameManager: this.gameManager
+                    });
+                    
+                    // 让GameManager能访问其他管理器
+                    this.gameManager.setManagers({
+                        adManager: this.adManager,
+                        dataManager: this.dataManager,
+                        uiManager: this.uiManager,
+                        questManager: this.questManager
+                    });
+                    
+                    // 让UIManager能访问其他管理器
+                    this.uiManager.setManagers({
+                        adManager: this.adManager,
+                        dataManager: this.dataManager,
+                        gameManager: this.gameManager,
+                        questManager: this.questManager
+                    });
+                    
+                    // 让AdManager能访问其他管理器
+                    this.adManager.setManagers({
+                        dataManager: this.dataManager,
+                        gameManager: this.gameManager,
+                        uiManager: this.uiManager
+                    });
+                    
+                    // 让DataManager能访问其他管理器
+                    this.dataManager.setManagers({
+                        gameManager: this.gameManager
+                    });
+                }
+                
+                bindEvents() {
+                    // 触摸和点击事件
+                    const handleTouch = (e) => {
+                        e.preventDefault();
+                        
+                        let touch;
+                        if (e.type === 'touchstart' || e.type === 'touchend') {
+                            touch = e.touches[0] || e.changedTouches[0];
+                        } else {
+                            touch = e;
+                        }
+                        
+                        if (!touch) return;
+                        
+                        const rect = this.canvas.getBoundingClientRect();
+                        
+                        // 直接使用Canvas显示区域的坐标转换
+                        // 游戏逻辑使用的是Canvas的显示尺寸，不是内部分辨率
+                        const x = touch.clientX - rect.left;
+                        const y = touch.clientY - rect.top;
+                        
+                        console.log('Touch/Click event:', x, y);
+                        
+                        // 记录触摸开始位置，用于滑动判断
+                        if (e.type === 'touchstart') {
+                            this.touchStartY = y;
+                            this.touchStartTime = Date.now();
+                            this.uiManager.handleTouchStart && this.uiManager.handleTouchStart(x, y);
+                        } else if (e.type === 'touchend' || e.type === 'click') {
+                            // 先让UI管理器处理触摸（优先级更高）
+                            const uiHandled = this.uiManager.handleTouch(x, y);
+                            console.log('UI handled touch:', uiHandled);
+                            
+                            // 如果UI没有处理这个触摸，再让游戏管理器处理
+                            if (!uiHandled) {
+                                console.log('Passing touch to game manager, canvas coords:', x, y);
+                                // 传递canvas坐标给GameManager，使用简化的格式
+                                const gameTouch = {
+                                    x: x,
+                                    y: y,
+                                    clientX: x, // 兼容性：同时提供clientX/clientY
+                                    clientY: y
+                                };
+                                this.gameManager.handleTouch(gameTouch);
+                            }
+                            
+                            this.uiManager.handleTouchEnd && this.uiManager.handleTouchEnd(x, y);
+                        }
+                    };
+                    
+                    // 触摸移动事件 - 处理滚动
+                    const handleTouchMove = (e) => {
+                        e.preventDefault();
+                        
+                        if (this.touchStartY !== undefined) {
+                            const touch = e.touches[0];
+                            const rect = this.canvas.getBoundingClientRect();
+                            const scaleY = this.canvas.height / rect.height;
+                            const y = (touch.clientY - rect.top) * scaleY;
+                            
+                            const deltaY = y - this.touchStartY;
+                            const deltaTime = Date.now() - this.touchStartTime;
+                            
+                            // 如果移动距离足够大且时间足够短，认为是滚动手势
+                            if (Math.abs(deltaY) > 10 && deltaTime < 500) {
+                                const rect = this.canvas.getBoundingClientRect();
+                                const scaleX = this.canvas.width / rect.width;
+                                const x = (touch.clientX - rect.left) * scaleX;
+                                
+                                // 传递滑动事件给UI管理器
+                                const scrollHandled = this.uiManager.handleTouchMove && 
+                                                     this.uiManager.handleTouchMove(x, y);
+                                console.log('Touch move handled by UI:', scrollHandled);
+                                
+                                // 更新起始位置
+                                this.touchStartY = y;
+                            }
+                        }
+                    };
+                    
+                    // 绑定事件
+                    this.canvas.addEventListener('touchstart', handleTouch, { passive: false });
+                    this.canvas.addEventListener('touchend', handleTouch, { passive: false });
+                    this.canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+                    this.canvas.addEventListener('click', handleTouch);
+                    
+                    // 鼠标滚轮事件（桌面端）
+                    this.canvas.addEventListener('wheel', (e) => {
+                        e.preventDefault();
+                        const scrollHandled = this.uiManager.handleScroll && 
+                                             this.uiManager.handleScroll(e.deltaY * 0.3);
+                        console.log('Wheel scroll handled by UI:', scrollHandled);
+                    }, { passive: false });
+                    
+                    // 窗口失焦和聚焦
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) {
+                            this.dataManager.saveData();
+                            this.gameManager.calculateOfflineProgress();
+                        } else {
+                            this.gameManager.showOfflineRewards();
+                        }
+                    });
+                    
+                    window.addEventListener('beforeunload', () => {
+                        this.dataManager.saveData();
+                    });
+                }
+                
+                gameLoop() {
+                    this.update();
+                    this.render();
+                    requestAnimationFrame(() => this.gameLoop());
+                }
+                
+                update() {
+                    this.gameManager.update();
+                    this.uiManager.update();
+                    this.questManager.update();
+                }
+                
+                render() {
+                    // 清空画布
+                    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                    
+                    // 渲染游戏
+                    this.gameManager.render();
+                    
+                    // 渲染UI层
+                    this.uiManager.render();
+                    
+                    // 最后渲染烟花粒子，确保显示在最顶层
+                    this.gameManager.renderFireworkParticles && this.gameManager.renderFireworkParticles();
+                }
+            }
+
+            // 启动H5游戏
+            window.magicShopGame = new H5MagicShopGame();
+            
+        } catch (error) {
+            console.error('游戏加载失败:', error);
+            gameAdapter.showError('游戏加载失败: ' + error.message);
+        }
+    </script>
+</body>
+</html>

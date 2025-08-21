@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>H5点击事件测试 - 简化版</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #2C1810;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 2px solid #FFD700;
+            background: #87CEEB;
+            display: block;
+            margin: 20px auto;
+        }
+        .log {
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .button {
+            background: #FFD700;
+            color: #2C1810;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 H5点击事件测试</h1>
+    <p>测试AdManager环境检测和点击事件处理</p>
+    
+    <canvas id="testCanvas" width="414" height="600"></canvas>
+    
+    <div>
+        <button class="button" onclick="testEnvironmentDetection()">测试环境检测</button>
+        <button class="button" onclick="testAdManager()">测试广告管理器</button>
+        <button class="button" onclick="clearLog()">清空日志</button>
+    </div>
+    
+    <div class="log" id="logArea"></div>
+
+    <script>
+        // 日志功能
+        function log(message) {
+            const logArea = document.getElementById('logArea');
+            const time = new Date().toLocaleTimeString();
+            logArea.innerHTML += `<div>[${time}] ${message}</div>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logArea').innerHTML = '';
+        }
+
+        // 模拟wx API
+        function createMockWx() {
+            window.wx = {
+                createRewardedVideoAd: function(options) {
+                    // 标记为H5环境下模拟，用于环境检测
+                    const ad = {
+                        load: () => {
+                            log('H5环境下模拟 - 加载激励视频广告');
+                            return Promise.resolve();
+                        },
+                        show: () => {
+                            log('H5环境下模拟 - 显示激励视频广告');
+                            return Promise.resolve();
+                        },
+                        onLoad: (callback) => setTimeout(callback, 100),
+                        onError: (callback) => {},
+                        onClose: (callback) => {
+                            setTimeout(() => {
+                                callback({ isEnded: true });
+                            }, 1000);
+                        }
+                    };
+                    
+                    // 重要：添加H5模拟标识
+                    ad.toString = () => 'function() { /* H5环境下模拟 */ }';
+                    
+                    return ad;
+                },
+                showModal: function(options) {
+                    const result = confirm((options.title || '') + '\n\n' + (options.content || ''));
+                    if (options.success) {
+                        options.success({ confirm: result, cancel: !result });
+                    }
+                },
+                showToast: function(options) {
+                    log('Toast: ' + options.title);
+                },
+                getStorageSync: function(key) {
+                    try {
+                        const data = localStorage.getItem('test_' + key);
+                        return data ? JSON.parse(data) : null;
+                    } catch (e) {
+                        return null;
+                    }
+                },
+                setStorageSync: function(key, data) {
+                    try {
+                        localStorage.setItem('test_' + key, JSON.stringify(data));
+                    } catch (e) {
+                        log('存储失败: ' + e.message);
+                    }
+                }
+            };
+            log('✅ 模拟wx对象已创建');
+        }
+
+        // 简化的AdManager用于测试
+        class TestAdManager {
+            constructor() {
+                this.isH5Environment = null;
+                log('🔄 AdManager构造函数开始');
+                
+                // 延迟初始化，确保wx对象已经创建
+                setTimeout(() => {
+                    this.isH5Environment = this.detectH5Environment();
+                    this.init();
+                }, 100);
+            }
+            
+            detectH5Environment() {
+                log('🔍 开始环境检测...');
+                
+                if (typeof window === 'undefined') {
+                    log('❌ 非浏览器环境');
+                    return false;
+                }
+                
+                if (!window.wx) {
+                    log('❌ 没有wx对象，判断为H5环境');
+                    return true;
+                }
+                
+                // 检查是否为模拟的wx对象
+                const isSimulatedWx = window.wx.createRewardedVideoAd && 
+                                     window.wx.createRewardedVideoAd.toString().includes('H5环境下模拟');
+                
+                log(`🔎 wx对象存在: true`);
+                log(`🔎 createRewardedVideoAd存在: ${!!window.wx.createRewardedVideoAd}`);
+                log(`🔎 是否为模拟wx: ${isSimulatedWx}`);
+                
+                return isSimulatedWx || !window.wx.createRewardedVideoAd;
+            }
+            
+            init() {
+                log(`🎯 环境检测结果: ${this.isH5Environment ? 'H5环境' : '微信环境'}`);
+                
+                if (this.isH5Environment) {
+                    log('✅ H5环境 - 使用模拟广告系统');
+                } else {
+                    log('✅ 微信环境 - 使用原生广告系统');
+                }
+            }
+            
+            showReviveAd(callback) {
+                log('📺 尝试显示复活广告');
+                
+                if (this.isH5Environment === null) {
+                    log('⏳ 环境检测中，延迟执行广告显示');
+                    setTimeout(() => this.showReviveAd(callback), 200);
+                    return;
+                }
+                
+                if (this.isH5Environment) {
+                    log('🎮 H5环境 - 模拟广告播放');
+                    setTimeout(() => {
+                        log('✅ 广告观看完成，执行回调');
+                        callback(true);
+                    }, 1000);
+                } else {
+                    log('📱 微信环境 - 显示原生广告');
+                    // 微信环境逻辑
+                }
+            }
+        }
+
+        // 测试功能
+        function testEnvironmentDetection() {
+            log('=== 开始环境检测测试 ===');
+            clearLog();
+            
+            // 先创建wx对象
+            createMockWx();
+            
+            // 再创建AdManager
+            setTimeout(() => {
+                window.testAdManager = new TestAdManager();
+            }, 50);
+        }
+
+        function testAdManager() {
+            if (!window.testAdManager) {
+                log('❌ 请先运行环境检测测试');
+                return;
+            }
+            
+            log('=== 开始广告管理器测试 ===');
+            
+            window.testAdManager.showReviveAd((success) => {
+                if (success) {
+                    log('🎉 复活广告测试成功！');
+                } else {
+                    log('❌ 复活广告测试失败');
+                }
+            });
+        }
+
+        // Canvas点击测试
+        const canvas = document.getElementById('testCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 绘制测试内容
+        function drawTestContent() {
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制工作台
+            ctx.fillStyle = '#4CAF50';
+            ctx.fillRect(20, 133, 90, 80);
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(20, 133, 90, 80);
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('工作台', 65, 180);
+            
+            // 绘制顾客
+            ctx.fillStyle = '#4169E1';
+            ctx.fillRect(200 - 25, 300 - 40, 50, 80);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText('顾客', 200, 250);
+        }
+
+        // 模拟GameManager的handleTouch
+        function handleCanvasClick(x, y) {
+            log(`🖱️ Canvas点击: (${x}, ${y})`);
+            
+            // 检查工作台点击 (20, 133, 90, 80)
+            if (x >= 20 && x <= 110 && y >= 133 && y <= 213) {
+                log('🏭 工作台被点击！');
+                return true;
+            }
+            
+            // 检查顾客点击 (175, 260, 50, 80)
+            if (x >= 175 && x <= 225 && y >= 260 && y <= 340) {
+                log('👤 顾客被点击！');
+                return true;
+            }
+            
+            return false;
+        }
+
+        // 绑定Canvas事件
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            handleCanvasClick(x, y);
+        });
+
+        // 初始化
+        drawTestContent();
+        log('🎮 H5点击事件测试页面初始化完成');
+        log('📋 点击"测试环境检测"开始测试');
+    </script>
+</body>
+</html>

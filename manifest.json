@@ -1,0 +1,14 @@
+{
+  "name": "魔法商店大亨",
+  "short_name": "魔法商店",
+  "description": "经营你的魔法商店，制作药水，升级设备，成为最强大的魔法商人！",
+  "version": "1.0.0",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#2C1810",
+  "background_color": "#2C1810",
+  "lang": "zh-CN",
+  "scope": "./",
+  "categories": ["games", "entertainment"],
+}

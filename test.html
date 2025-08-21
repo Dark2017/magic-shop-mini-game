@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>魔法商店大亨 - 测试版</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 1px solid #333;
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 12px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div>游戏测试版本</div>
+        <div>点击测试UI功能</div>
+        <div>网络图片加载测试</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    
+    <script>
+        // 模拟微信小游戏环境
+        window.wx = {
+            getSystemInfoSync: () => ({
+                windowWidth: 375,
+                windowHeight: 667,
+                screenWidth: 375,
+                screenHeight: 667,
+                pixelRatio: 2,
+                statusBarHeight: 44,
+                platform: 'ios',
+                model: 'iPhone',
+                safeArea: {
+                    top: 44,
+                    bottom: 633,
+                    left: 0,
+                    right: 375
+                }
+            }),
+            createCanvas: () => document.getElementById('gameCanvas'),
+            createImage: () => new Image(),
+            onHide: (callback) => {
+                window.addEventListener('blur', callback);
+            },
+            onShow: (callback) => {
+                window.addEventListener('focus', callback);
+            },
+            showActionSheet: (options) => {
+                const choice = prompt('选择:\n' + options.itemList.map((item, i) => `${i}: ${item}`).join('\n'));
+                if (choice !== null && options.success) {
+                    options.success({ tapIndex: parseInt(choice) });
+                }
+            },
+            showModal: (options) => {
+                const result = confirm(options.title + '\n\n' + options.content);
+                if (options.success) {
+                    options.success({ confirm: result });
+                }
+            },
+            showToast: (options) => {
+                console.log('Toast:', options.title);
+                alert(options.title);
+            },
+            shareAppMessage: (options) => {
+                console.log('分享:', options.title);
+            },
+            // 存储API模拟
+            getStorageSync: (key) => {
+                try {
+                    const data = localStorage.getItem(key);
+                    return data ? JSON.parse(data) : null;
+                } catch (e) {
+                    console.warn('getStorageSync error:', e);
+                    return null;
+                }
+            },
+            setStorageSync: (key, data) => {
+                try {
+                    localStorage.setItem(key, JSON.stringify(data));
+                } catch (e) {
+                    console.warn('setStorageSync error:', e);
+                }
+            },
+            removeStorageSync: (key) => {
+                try {
+                    localStorage.removeItem(key);
+                } catch (e) {
+                    console.warn('removeStorageSync error:', e);
+                }
+            },
+            // 云存储API模拟
+            setUserCloudStorage: (options) => {
+                console.log('Cloud storage (simulated):', options.KVDataList);
+                if (options.success) {
+                    setTimeout(options.success, 100);
+                }
+            },
+            // 广告API模拟
+            createRewardedVideoAd: () => ({
+                load: () => Promise.resolve(),
+                show: () => Promise.resolve(),
+                onLoad: () => {},
+                onError: () => {},
+                onClose: (callback) => {
+                    setTimeout(() => callback({ isEnded: true }), 2000);
+                }
+            }),
+            createBannerAd: () => ({
+                show: () => console.log('Banner ad shown'),
+                hide: () => console.log('Banner ad hidden'),
+                onLoad: () => {},
+                onError: () => {}
+            })
+        };
+        
+        // 设置画布
+        const canvas = document.getElementById('gameCanvas');
+        canvas.width = 375;
+        canvas.height = 667;
+        
+        window.requestAnimationFrame = window.requestAnimationFrame || 
+                                       window.webkitRequestAnimationFrame || 
+                                       window.mozRequestAnimationFrame;
+        
+        // 添加全局错误处理，过滤微信小程序内部错误
+        window.addEventListener('error', (e) => {
+            // 过滤微信小程序开发者工具的内部错误
+            if (e.message && (
+                e.message.includes('insertTextView') ||
+                e.message.includes('updateTextView') || 
+                e.message.includes('insertImageView') ||
+                e.message.includes('updateImageView') ||
+                e.message.includes('appServiceSDKScriptError')
+            )) {
+                console.log('已忽略微信小程序内部错误:', e.message);
+                e.preventDefault();
+                return false;
+            }
+        });
+        
+        // 控制台错误过滤
+        const originalConsoleError = console.error;
+        console.error = function(...args) {
+            const message = args.join(' ');
+            if (message.includes('insertTextView') || 
+                message.includes('updateTextView') ||
+                message.includes('insertImageView') ||
+                message.includes('updateImageView') ||
+                message.includes('appServiceSDKScriptError')) {
+                // 忽略微信小程序内部错误
+                return;
+            }
+            originalConsoleError.apply(console, args);
+        };
+    </script>
+    
+    <script type="module">
+        // 导入游戏模块
+        import AdManager from './src/managers/AdManager.js';
+        import DataManager from './src/managers/DataManager.js';
+        import GameManager from './src/managers/GameManager.js';
+        import UIManager from './src/managers/UIManagerNew.js';
+
+        class TestGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                
+                // 初始化管理器
+                this.adManager = new AdManager();
+                this.dataManager = new DataManager();
+                this.gameManager = new GameManager(this.ctx, this.canvas);
+                this.uiManager = new UIManager(this.ctx, this.canvas);
+                
+                this.init();
+            }
+            
+            init() {
+                console.log('测试游戏初始化开始');
+                
+                // 加载游戏数据
+                this.dataManager.loadData();
+                
+                // 设置管理器之间的关联
+                this.setupManagerReferences();
+                
+                // 设置游戏循环
+                this.gameLoop();
+                
+                // 绑定事件
+                this.bindEvents();
+                
+                console.log('测试游戏初始化完成');
+            }
+            
+            setupManagerReferences() {
+                // 让GameManager能访问其他管理器
+                this.gameManager.setManagers({
+                    adManager: this.adManager,
+                    dataManager: this.dataManager,
+                    uiManager: this.uiManager
+                });
+                
+                // 让UIManager能访问其他管理器
+                this.uiManager.setManagers({
+                    adManager: this.adManager,
+                    dataManager: this.dataManager,
+                    gameManager: this.gameManager
+                });
+                
+                // 让AdManager能访问其他管理器
+                this.adManager.setManagers({
+                    dataManager: this.dataManager,
+                    gameManager: this.gameManager,
+                    uiManager: this.uiManager
+                });
+                
+                // 让DataManager能访问其他管理器
+                this.dataManager.setManagers({
+                    gameManager: this.gameManager
+                });
+            }
+            
+            bindEvents() {
+                // 触摸/点击事件
+                this.canvas.addEventListener('click', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const touch = {
+                        clientX: e.clientX - rect.left,
+                        clientY: e.clientY - rect.top
+                    };
+                    
+                    console.log('Canvas clicked at:', touch.clientX, touch.clientY);
+                    console.log('UI state - showingStartScreen:', this.uiManager.showingStartScreen);
+                    
+                    // 先让UI管理器处理触摸（优先级更高）
+                    const handled = this.uiManager.handleTouch(touch.clientX, touch.clientY);
+                    console.log('UI handled touch:', handled);
+                    
+                    // 如果不在UI模式下，再让游戏管理器处理
+                    if (!this.uiManager.showingStartScreen && !this.uiManager.gamePaused && 
+                        !this.uiManager.showingUpgradePanel && !this.uiManager.showingStatsPanel) {
+                        this.gameManager.handleTouch(touch);
+                    }
+                });
+                
+                // 窗口失焦
+                window.addEventListener('blur', () => {
+                    this.dataManager.saveData();
+                    this.gameManager.calculateOfflineProgress();
+                });
+                
+                // 窗口聚焦
+                window.addEventListener('focus', () => {
+                    this.gameManager.showOfflineRewards();
+                });
+            }
+            
+            gameLoop() {
+                this.update();
+                this.render();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+            
+            update() {
+                this.gameManager.update();
+                this.uiManager.update();
+            }
+            
+            render() {
+                // 清空画布
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // 渲染游戏
+                this.gameManager.render();
+                this.uiManager.render();
+            }
+        }
+
+        // 启动测试游戏
+        new TestGame();
+    </script>
+</body>
+</html>
