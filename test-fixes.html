@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修复测试 - 魔法商店</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #2C1810;
+            touch-action: manipulation;
+        }
+        .info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #FFD700;
+            font-size: 12px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 300px;
+        }
+        .test-results {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #FFD700;
+            font-size: 11px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 250px;
+        }
+        .test-pass { color: #32CD32; }
+        .test-fail { color: #FF6347; }
+        .test-pending { color: #FFD700; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="info">
+        <strong>修复测试</strong><br>
+        1. 点击"任务"按钮测试空指针修复<br>
+        2. 打开面板后点击右上角按钮测试穿透阻止<br>
+        3. 在底部按钮区域滑动测试滚动/点击冲突修复<br>
+        <br>
+        <strong>操作说明：</strong><br>
+        - 首先点击"开始游戏"<br>
+        - 然后进行上述测试项目
+    </div>
+
+    <div class="test-results">
+        <strong>测试结果：</strong><br>
+        <div id="test1" class="test-pending">1. 空指针修复: 待测试</div>
+        <div id="test2" class="test-pending">2. 点击穿透阻止: 待测试</div>
+        <div id="test3" class="test-pending">3. 滚动/点击冲突: 待测试</div>
+        <div id="errors" style="margin-top: 10px; color: #FF6347;"></div>
+    </div>
+
+    <script type="module">
+        // 导入游戏模块
+        import DataManager from './src/managers/DataManager.js'
+        import AdManager from './src/managers/AdManager.js'
+        import GameManager from './src/managers/GameManager.js'
+        import UIManagerNew from './src/managers/UIManagerNew.js'
+        import QuestManager from './src/managers/QuestManager.js'
+
+        // 获取canvas和设置
+        const canvas = document.getElementById('gameCanvas')
+        const ctx = canvas.getContext('2d')
+
+        // 设置画布大小
+        const resizeCanvas = () => {
+            canvas.width = Math.min(window.innerWidth, 400)
+            canvas.height = Math.min(window.innerHeight, 700)
+        }
+        resizeCanvas()
+        window.addEventListener('resize', resizeCanvas)
+
+        // 测试结果追踪
+        let testResults = {
+            test1: 'pending',
+            test2: 'pending', 
+            test3: 'pending'
+        }
+
+        const updateTestResult = (testId, result, message = '') => {
+            testResults[testId] = result
+            const element = document.getElementById(testId)
+            element.className = `test-${result}`
+            const testName = element.textContent.split(':')[0]
+            element.textContent = `${testName}: ${result === 'pass' ? '✓ 通过' : result === 'fail' ? '✗ 失败' : '待测试'}`
+            if (message) {
+                element.textContent += ` (${message})`
+            }
+        }
+
+        const logError = (error) => {
+            console.error('测试错误:', error)
+            const errorsDiv = document.getElementById('errors')
+            errorsDiv.innerHTML += `<div>${error.message || error}</div>`
+        }
+
+        // 创建管理器实例
+        let dataManager, adManager, gameManager, uiManager, questManager
+
+        try {
+            dataManager = new DataManager()
+            adManager = new AdManager()
+            gameManager = new GameManager()
+            uiManager = new UIManagerNew(ctx, canvas)
+            questManager = new QuestManager()
+
+            // 设置管理器依赖
+            const managers = { dataManager, adManager, gameManager, questManager }
+            gameManager.setManagers(managers)
+            uiManager.setManagers(managers)
+            questManager.setManagers(managers)
+
+            console.log('所有管理器初始化成功')
+
+            // 游戏循环
+            let lastTime = 0
+            const gameLoop = (currentTime) => {
+                const deltaTime = currentTime - lastTime
+                lastTime = currentTime
+
+                // 清空画布
+                ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+                // 更新游戏逻辑
+                if (gameManager && !uiManager.showingStartScreen && !uiManager.gamePaused) {
+                    gameManager.update(deltaTime)
+                }
+
+                // 渲染UI
+                if (uiManager) {
+                    uiManager.render()
+                }
+
+                requestAnimationFrame(gameLoop)
+            }
+
+            // 监听原始错误以检测空指针问题
+            let originalError = window.onerror
+            window.onerror = function(message, source, lineno, colno, error) {
+                if (message.includes('Cannot read properties of null') && source.includes('QuestPanel')) {
+                    updateTestResult('test1', 'fail', '仍有空指针错误')
+                    logError('QuestPanel空指针错误: ' + message)
+                } else if (originalError) {
+                    originalError.apply(this, arguments)
+                }
+            }
+
+            // 触摸事件处理
+            let touchStartPos = null
+            let touchStartTime = 0
+            let scrollDistance = 0
+
+            const handleTouchStart = (e) => {
+                e.preventDefault()
+                const rect = canvas.getBoundingClientRect()
+                const x = e.touches[0].clientX - rect.left
+                const y = e.touches[0].clientY - rect.top
+                
+                touchStartPos = { x, y }
+                touchStartTime = Date.now()
+                scrollDistance = 0
+                
+                if (uiManager && typeof uiManager.handleTouchStart === 'function') {
+                    uiManager.handleTouchStart(x, y)
+                }
+            }
+
+            const handleTouchMove = (e) => {
+                e.preventDefault()
+                if (!touchStartPos) return
+                
+                const rect = canvas.getBoundingClientRect()
+                const x = e.touches[0].clientX - rect.left
+                const y = e.touches[0].clientY - rect.top
+                
+                const deltaX = x - touchStartPos.x
+                const deltaY = y - touchStartPos.y
+                scrollDistance += Math.abs(deltaX) + Math.abs(deltaY)
+                
+                if (uiManager && typeof uiManager.handleTouchMove === 'function') {
+                    const handled = uiManager.handleTouchMove(x, y)
+                    if (handled) {
+                        // 测试滚动功能
+                        updateTestResult('test3', 'pass', '滚动正常工作')
+                    }
+                }
+            }
+
+            const handleTouchEnd = (e) => {
+                e.preventDefault()
+                if (!touchStartPos) return
+                
+                const rect = canvas.getBoundingClientRect()
+                const x = e.changedTouches[0].clientX - rect.left
+                const y = e.changedTouches[0].clientY - rect.top
+                
+                const deltaX = x - touchStartPos.x
+                const deltaY = y - touchStartPos.y
+                const touchDuration = Date.now() - touchStartTime
+                
+                if (uiManager && typeof uiManager.handleTouchEnd === 'function') {
+                    const handled = uiManager.handleTouchEnd(x, y, deltaX, deltaY, touchDuration)
+                } else if (uiManager) {
+                    const handled = uiManager.handleTouch(x, y)
+                    
+                    // 检测点击测试
+                    if (handled) {
+                        // 如果点击了任务按钮且没有报错，说明空指针修复成功
+                        setTimeout(() => {
+                            if (testResults.test1 === 'pending') {
+                                updateTestResult('test1', 'pass', '无空指针错误')
+                            }
+                        }, 100)
+                        
+                        // 检测是否成功阻止了穿透
+                        if (uiManager.questPanel && uiManager.questPanel.isVisible) {
+                            // 如果面板打开，检测右上角按钮是否被正确阻止
+                            const rightTopArea = x > canvas.width - 100 && y < 150
+                            if (rightTopArea) {
+                                updateTestResult('test2', 'pass', '成功阻止穿透点击')
+                            }
+                        }
+                    }
+                }
+                
+                touchStartPos = null
+            }
+
+            // 鼠标事件处理（用于桌面测试）
+            const handleMouseClick = (e) => {
+                const rect = canvas.getBoundingClientRect()
+                const x = e.clientX - rect.left
+                const y = e.clientY - rect.top
+                
+                if (uiManager) {
+                    const handled = uiManager.handleTouch(x, y)
+                    
+                    // 检测点击测试
+                    if (handled) {
+                        setTimeout(() => {
+                            if (testResults.test1 === 'pending') {
+                                updateTestResult('test1', 'pass', '无空指针错误')
+                            }
+                        }, 100)
+                        
+                        if (uiManager.questPanel && uiManager.questPanel.isVisible) {
+                            const rightTopArea = x > canvas.width - 100 && y < 150
+                            if (rightTopArea) {
+                                updateTestResult('test2', 'pass', '成功阻止穿透点击')
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 绑定事件
+            canvas.addEventListener('touchstart', handleTouchStart, { passive: false })
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false })
+            canvas.addEventListener('touchend', handleTouchEnd, { passive: false })
+            canvas.addEventListener('click', handleMouseClick)
+
+            // 启动游戏循环
+            requestAnimationFrame(gameLoop)
+
+            console.log('游戏启动成功，开始测试')
+
+        } catch (error) {
+            console.error('游戏初始化失败:', error)
+            logError(error)
+        }
+    </script>
+</body>
+</html>

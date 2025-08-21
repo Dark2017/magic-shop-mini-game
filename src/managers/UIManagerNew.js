@@ -29,10 +29,12 @@ export default class UIManagerNew {
     this.buttonGroupWidth = 0  // 按钮组总宽度
     this.visibleButtonWidth = 0  // 可见区域宽度
     
-    // 触摸滚动状态
-    this.touchStart = { x: 0, y: 0 }
-    this.isTouching = false
-    this.touchStartTime = 0
+  // 触摸滚动状态
+  this.touchStart = { x: 0, y: 0 }
+  this.isTouching = false
+  this.touchStartTime = 0
+  this.hasScrolled = false  // 标记是否发生了滚动
+  this.scrollThreshold = 5  // 滚动阈值（像素）- 适中的阈值，避免误触
     
     // 设备适配参数
     this.deviceInfo = UIUtils.getDeviceInfo()
@@ -620,51 +622,107 @@ export default class UIManagerNew {
   handleTouch(x, y) {
     console.log('UIManagerNew.handleTouch called with:', x, y)
     
-    // 检查库存不足提示关闭按钮
+    // 最高优先级：检查库存不足提示关闭按钮（模态层级）
     if (this.showingInsufficientStockNotice && this.insufficientStockCloseButton) {
       if (UIUtils.isPointInRect(x, y, this.insufficientStockCloseButton)) {
         this.showingInsufficientStockNotice = false
-        return true
+        console.log('库存不足提示已关闭')
+        return true // 阻止事件继续传播
+      }
+      // 如果点击了提示框区域但不是关闭按钮，阻止事件穿透
+      const noticeWidth = 280
+      const noticeHeight = 100
+      const noticeX = (this.canvas.width - noticeWidth) / 2
+      const noticeY = (this.canvas.height - noticeHeight) / 2
+      if (x >= noticeX && x <= noticeX + noticeWidth && y >= noticeY && y <= noticeY + noticeHeight) {
+        console.log('点击在库存不足提示框内，阻止事件穿透')
+        return true // 阻止事件继续传播
       }
     }
     
-    // 如果显示开始屏幕
+    // 次高优先级：开始屏幕和暂停屏幕（全屏覆盖层级）
     if (this.showingStartScreen) {
-      return this.startButton.handleTouch(x, y)
+      const handled = this.startButton && this.startButton.handleTouch(x, y)
+      if (handled) {
+        console.log('开始按钮处理了点击事件')
+      }
+      return handled
     }
     
-    // 如果游戏暂停
     if (this.gamePaused) {
-      return this.resumeButton.handleTouch(x, y)
+      const handled = this.resumeButton && this.resumeButton.handleTouch(x, y)
+      if (handled) {
+        console.log('恢复按钮处理了点击事件')
+      }
+      return handled
     }
     
-    // 面板相关触摸处理
-    if (this.statsPanel.isVisible) {
-      return this.statsPanel.handleTouch(x, y)
+    // 中等优先级：各个面板（覆盖层级）
+    // 按照从最新打开到最早打开的顺序检查，确保最上层的面板优先处理
+    const visiblePanels = [
+      { panel: this.inventoryPanel, name: '背包面板' },
+      { panel: this.shopPanel, name: '商店面板' },
+      { panel: this.questPanel, name: '任务面板' },
+      { panel: this.workshopPanel, name: '工作台面板' },
+      { panel: this.upgradePanel, name: '升级面板' },
+      { panel: this.statsPanel, name: '统计面板' }
+    ]
+    
+    // 检查是否有任何面板可见
+    const hasVisiblePanel = visiblePanels.some(({ panel }) => panel.isVisible)
+    
+    for (const { panel, name } of visiblePanels) {
+      if (panel.isVisible) {
+        let handled = false
+        
+        if (panel === this.upgradePanel) {
+          handled = panel.handleTouch(x, y, this.gameManager)
+        } else if (panel === this.workshopPanel) {
+          // 暂时屏蔽广告功能，传入null而不是adManager
+          handled = panel.handleTouch(x, y, this.dataManager, this.gameManager, null)
+        } else {
+          handled = panel.handleTouch(x, y)
+        }
+        
+        if (handled) {
+          console.log(`${name}处理了点击事件`)
+          return true // 阻止事件继续传播
+        }
+        
+        // 如果有面板显示但没有处理点击，检查是否点击在面板背景遮罩上
+        // 阻止点击穿透到下层UI元素（如右上角按钮）
+        const panelArea = this.getPanelBackgroundArea()
+        if (x >= panelArea.x && x <= panelArea.x + panelArea.width && 
+            y >= panelArea.y && y <= panelArea.y + panelArea.height) {
+          console.log(`点击在${name}的背景遮罩区域，阻止穿透`)
+          return true // 阻止事件继续传播
+        }
+      }
     }
     
-    if (this.upgradePanel.isVisible) {
-      return this.upgradePanel.handleTouch(x, y, this.gameManager)
+    // 如果有面板显示，阻止点击右上角按钮（防止穿透）
+    if (hasVisiblePanel) {
+      // 检查是否点击了右上角按钮区域
+      const rightTopButtonArea = {
+        x: this.canvas.width - 100, // 右上角按钮区域
+        y: 0,
+        width: 100,
+        height: 150
+      }
+      
+      if (x >= rightTopButtonArea.x && x <= rightTopButtonArea.x + rightTopButtonArea.width && 
+          y >= rightTopButtonArea.y && y <= rightTopButtonArea.y + rightTopButtonArea.height) {
+        console.log('有面板显示时阻止右上角按钮点击')
+        return true // 阻止点击穿透
+      }
     }
     
-    if (this.workshopPanel.isVisible) {
-      return this.workshopPanel.handleTouch(x, y, this.dataManager, this.gameManager, this.adManager)
+    // 最低优先级：主界面UI元素
+    const handled = this.handleMainUITouch(x, y)
+    if (handled) {
+      console.log('主界面UI处理了点击事件')
     }
-    
-    if (this.questPanel.isVisible) {
-      return this.questPanel.handleTouch(x, y)
-    }
-    
-    if (this.shopPanel.isVisible) {
-      return this.shopPanel.handleTouch(x, y)
-    }
-    
-    if (this.inventoryPanel.isVisible) {
-      return this.inventoryPanel.handleTouch(x, y)
-    }
-    
-    // 主界面触摸处理
-    return this.handleMainUITouch(x, y)
+    return handled
   }
   
   // 触摸开始事件
@@ -672,6 +730,7 @@ export default class UIManagerNew {
     this.touchStart = { x, y }
     this.isTouching = true
     this.touchStartTime = Date.now()
+    this.hasScrolled = false  // 重置滚动标记
     
     // 传递给面板
     if (this.questPanel && this.questPanel.isVisible && typeof this.questPanel.handleTouchStart === 'function') {
@@ -691,22 +750,26 @@ export default class UIManagerNew {
     
     const deltaX = x - this.touchStart.x
     const deltaY = y - this.touchStart.y
+    const totalDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
     
     // 传递给可见的面板处理垂直滚动
     if (this.questPanel && this.questPanel.isVisible && typeof this.questPanel.handleTouchMove === 'function') {
       if (this.questPanel.handleTouchMove(x, y, deltaX, deltaY)) {
+        this.hasScrolled = true  // 面板滚动也标记为已滚动
         return true
       }
     }
     
     if (this.shopPanel && this.shopPanel.isVisible && typeof this.shopPanel.handleTouchMove === 'function') {
       if (this.shopPanel.handleTouchMove(x, y, deltaX, deltaY)) {
+        this.hasScrolled = true  // 面板滚动也标记为已滚动
         return true
       }
     }
     
     if (this.inventoryPanel && this.inventoryPanel.isVisible && typeof this.inventoryPanel.handleTouchMove === 'function') {
       if (this.inventoryPanel.handleTouchMove(x, y, deltaX, deltaY)) {
+        this.hasScrolled = true  // 面板滚动也标记为已滚动
         return true
       }
     }
@@ -719,11 +782,27 @@ export default class UIManagerNew {
       
       // 检查是否在按钮区域内
       if (y >= buttonGroupY && y <= buttonGroupY + buttonGroupHeight) {
-        // 横向滚动
-        const scrollAmount = -deltaX * 0.8 // 滚动方向相反，调整灵敏度
-        this.buttonScrollX = Math.max(0, Math.min(this.buttonScrollX + scrollAmount, this.maxButtonScrollX))
-        this.updateButtonPositions()
-        return true
+        // 更严格的滚动检测：考虑横向移动距离
+        const horizontalDistance = Math.abs(deltaX)
+        const verticalDistance = Math.abs(deltaY)
+        
+        // 只有当横向移动距离大于纵向移动距离且超过阈值时才认为是滚动
+        if (horizontalDistance > this.scrollThreshold && horizontalDistance > verticalDistance) {
+          this.hasScrolled = true  // 标记为已滚动
+          this.actualScrollDistance += Math.abs(deltaX)  // 累计实际滚动距离
+          
+          // 横向滚动
+          const scrollAmount = -deltaX * 0.8 // 滚动方向相反，调整灵敏度
+          this.buttonScrollX = Math.max(0, Math.min(this.buttonScrollX + scrollAmount, this.maxButtonScrollX))
+          this.updateButtonPositions()
+          
+          // 更新触摸起始位置，实现连续滚动
+          this.touchStart.x = x
+          this.touchStart.y = y
+          
+          console.log('横向滚动检测 - 水平距离:', horizontalDistance, '垂直距离:', verticalDistance, '累计滚动:', this.actualScrollDistance)
+          return true
+        }
       }
     }
     
@@ -760,9 +839,18 @@ export default class UIManagerNew {
       }
     }
     
-    // 如果是短距离快速滑动，判断为点击
-    if (distance < 10 && touchDuration < 300) {
+    // 严格的点击判断逻辑：必须同时满足多个条件
+    const isValidClick = !this.hasScrolled && 
+                        distance < 8 && 
+                        touchDuration < 300 && 
+                        Math.abs(deltaX) < 6 && 
+                        Math.abs(deltaY) < 6
+    
+    if (isValidClick) {
+      console.log('检测到有效点击事件，距离:', distance, '时长:', touchDuration, 'deltaX:', deltaX, 'deltaY:', deltaY)
       return this.handleTouch(x, y)
+    } else {
+      console.log('跳过点击事件 - 滚动:', this.hasScrolled, '距离:', distance, '时长:', touchDuration, 'deltaX:', deltaX, 'deltaY:', deltaY)
     }
     
     return false
@@ -838,20 +926,20 @@ export default class UIManagerNew {
     console.log('handleMainUITouch called with:', x, y)
     
     // 右上角按钮
-    if (this.pauseButton.handleTouch(x, y)) return true
-    if (this.menuButton.handleTouch(x, y)) return true
+    if (this.pauseButton && this.pauseButton.handleTouch(x, y)) return true
+    if (this.menuButton && this.menuButton.handleTouch(x, y)) return true
     
     // 底部按钮处理
     if (this.bottomBarCollapsed) {
-      if (this.expandButton.handleTouch(x, y)) return true
+      if (this.expandButton && this.expandButton.handleTouch(x, y)) return true
     } else {
-      if (this.statsButton.handleTouch(x, y)) return true
-      if (this.workshopButton.handleTouch(x, y)) return true
-      if (this.questButton.handleTouch(x, y)) return true
-      if (this.shopButton.handleTouch(x, y)) return true
-      if (this.inventoryButton.handleTouch(x, y)) return true
-      if (this.autoSellButton.handleTouch(x, y)) return true
-      if (this.collapseButton.handleTouch(x, y)) return true
+      if (this.statsButton && this.statsButton.handleTouch(x, y)) return true
+      if (this.workshopButton && this.workshopButton.handleTouch(x, y)) return true
+      if (this.questButton && this.questButton.handleTouch(x, y)) return true
+      if (this.shopButton && this.shopButton.handleTouch(x, y)) return true
+      if (this.inventoryButton && this.inventoryButton.handleTouch(x, y)) return true
+      if (this.autoSellButton && this.autoSellButton.handleTouch(x, y)) return true
+      if (this.collapseButton && this.collapseButton.handleTouch(x, y)) return true
     }
     
     return false
@@ -1017,6 +1105,17 @@ export default class UIManagerNew {
     return {
       minY: this.uiConfig.topBarHeight,
       maxY: this.canvas.height - bottomUIHeight - 60
+    }
+  }
+  
+  // 获取面板背景遮罩区域
+  getPanelBackgroundArea() {
+    // 面板通常占据整个屏幕作为背景遮罩
+    return {
+      x: 0,
+      y: 0,
+      width: this.canvas.width,
+      height: this.canvas.height
     }
   }
   

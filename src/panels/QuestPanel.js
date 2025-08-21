@@ -547,7 +547,39 @@ export default class QuestPanel {
     return false
   }
   
+  // 触摸开始事件
+  handleTouchStart(x, y) {
+    // 目前QuestPanel不需要特殊的触摸开始处理
+    return false
+  }
+  
+  // 触摸移动事件（用于滚动）
+  handleTouchMove(x, y, deltaX, deltaY) {
+    if (!this.isVisible) return false
+    
+    // 处理垂直滚动
+    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      return this.handleScroll(deltaY)
+    }
+    
+    return false
+  }
+  
+  // 触摸结束事件
+  handleTouchEnd(x, y, deltaX, deltaY, touchDuration) {
+    if (!this.isVisible) return false
+    
+    // 如果有明显的滚动，不处理点击
+    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+      return false
+    }
+    
+    // 处理点击事件
+    return this.handleTouch(x, y)
+  }
+  
   isPointInButton(x, y, button) {
+    if (!button) return false
     return x >= button.x && x <= button.x + button.width &&
            y >= button.y && y <= button.y + button.height
   }
